@@ -1,4 +1,22 @@
 function generate_Q_and_q_bd(n,p,qq,seed)
+
+    """
+    Generates a block-diagonal symmetric matrix `Q` and a vector `q` for an optimization problem. 
+    Each block is a symmetric matrix derived from random normal distributions.
+    
+    # Arguments
+    - `n::Int`: The size of the matrix `Q` (total number of rows/columns).
+    - `p::Int`: The number of blocks in the block-diagonal structure.
+    - `qq::Int`: The size of each block (assuming all blocks are square and of equal size).
+    - `seed::Int`: Seed value for randomness, ensuring reproducibility.
+    
+    # Returns
+    - `Q::Matrix{Float64}`: A symmetric block-diagonal `n × n` matrix, where each block is a `qq × qq` symmetric matrix.
+    - `q::Vector{Float64}`: A vector of length `n` with entries sampled from a standard normal distribution.
+    
+    # Notes
+    - The block-diagonal structure of `Q` is created by dividing `n` into `p` blocks, each of size `qq`. Ensure that `n == p * qq` to avoid indexing issues.
+    """
     Random.seed!(seed)
     
     blocks = [randn(qq, qq) for _ in 1:p] 
@@ -21,7 +39,24 @@ end
 ##############################################################################################################################################
 
 
-function find_clique_index(k::Int, p::Int, qq::Int)::Union{Int, Nothing}
+function find_clique_index(k, p, qq)
+
+    """
+    find_clique_index(k, p, qq)
+
+    Determines the clique index (block number) corresponding to a given variable index `k` in a block-structured problem. 
+    The problem is assumed to have `p` cliques, each containing `qq` variables.
+    
+    # Arguments
+    - `k::Int`: The variable index for which the clique index is to be found.
+    - `p::Int`: The total number of cliques (blocks) in the problem.
+    - `qq::Int`: The size of each clique (number of variables per block).
+    
+    # Returns
+    - `clique_index::Int`: The index of the clique (block) containing the variable `k`.
+    - `nothing`: If `k` is out of bounds (i.e., `k < 1` or `k > p * qq`).
+    
+    """
     n = p * qq
     if k < 1 || k > n
         println("Index $k is out of bounds.")
@@ -32,6 +67,24 @@ function find_clique_index(k::Int, p::Int, qq::Int)::Union{Int, Nothing}
 end
 
 function construct_CDKmarg_SVD_CS(Mm, loc_idx, gl_idx, threshold=0.001)
+
+    """
+    Constructs marginal Christoffel polynomials (CDK) using Singular Value Decomposition (SVD) for the per-clique input moment matrices `Mm`. 
+    
+    # Arguments
+    - `Mm::Matrix`: The input moment matrix from which which the marginal CDK is constructed.
+    - `loc_idx::Int`: Specifies the local index (within the clique-correspinding moment matrix) of the decision variable for which CDK should be constructed .
+    - `gl_idx::Int`: Specifies the global index of the decision variable for which CDK should be constructed .
+    - `threshold::Float64` (optional): A threshold value for filtering eigenvalue (i.e., deciding the numerical rank of `Mm`) . Default is `0.001`.
+    
+    # Returns
+    - `cdk`: The constructed marginal CDK.
+    - `p_alpha_squared[1:negativeEV]`: Polynomials in the kernel of the marginal moment matrix.
+    - `positiveEV`: The set of positive eigenvalues of the marginal moment matrix.
+    - `negativeEV`: The set of negative eigenvalues of the marginal moment matrix.
+    - `minimum(Qval)`: The minimum eigenvalue of the marginal moment matrix.
+    
+    """
 
 
     eigen_result = eigen(Mm[[1,loc_idx+1],[1,loc_idx+1]])
@@ -63,6 +116,33 @@ end
 
 
 function Run_H2_CS(x,n,p,qq,seed,solIpopt,tau,running_time=false,kernel_cutoff=0.0001)
+
+    """`
+    Applies correlative-sparsity enabled H2 algorithm to a particular QCQP instance generated using `seed`.
+    Instance is generated randomly and block-diagonal, having p blocks each of size qq.
+    
+    # Arguments
+    - `x::Vector`: Initial vector of decision variables 
+    - `n::Int`: Dimension of the problem.
+    - `p::Int`: The total number of cliques (blocks) in the problem.
+    - `qq::Int`: The size of each clique (number of variables per block).
+    - `seed::Int`: Seed value for randomness, ensuring reproducibility.
+    - `solIpopt`: Available local solution (here obtained from an external local optimizer IPOPT).
+    - `tau::Float64`: Filtering parameter 
+    - `running_time::Bool` (optional): If `true`, measures and returns the total runtime of the H2. Default is `false`.
+    - `kernel_cutoff::Float64` (optional): Threshold $\beta$ controling the strength of the Tikhonov regularization of marginal Christoffel polynomials. Default is `0.0001`.
+    
+    # Returns
+    A tuple of the following:
+    1. `[opt, optcdk]`: A pair containing the optimal solutions of moment relaxation before and after CDK strengthening via H2.
+    2. `[gap, gapcdk]`: Relative optimality gaps before and after CDK strengthening via H2.
+    3. `Gammas`: Thresholds used to construct sublevel sets of marginal Christoffel polynomials (CDK).
+    4. `Gammas_kernel`: Thresholds used to construct sublevel sets of marginal Christoffel polynomials (CDK).
+    5. `[ubRef, f(solcdk)]`: The available upper bound before and after CDK strengthening via H2.
+    6. `[data.moment,datacdk.moment]`: The moment matrices (for each clique) before and after CDK strengthening via H2.
+    7. `total_time`: The total runtime of H2 `running_time` is `true`.
+    
+    """
 
     println()
     println("_______________ INITIAL PROBLEM CHARACTERISTICS_____________________ ")
@@ -148,14 +228,8 @@ function Run_H2_CS(x,n,p,qq,seed,solIpopt,tau,running_time=false,kernel_cutoff=0
         if gamma_i < tau
             if temp[4] > 0
                 push!(Gammas_kernel, sum(temp[2])(solIpopt[i])+kernel_cutoff)
-                #println()
-                #println("I add these TWO: ", i)
-                #println([sum(temp[2])(solIpopt[i])+kernel_cutoff-sum(temp[2]), gamma_i-temp[1]])
                 push!(popcdk,sum(temp[2])(solIpopt[i])+kernel_cutoff-sum(temp[2]), gamma_i-temp[1])
             else
-                #println()
-                #println("I add this ONE: ", i)
-                #println(gamma_i-temp[1])
                 push!(popcdk, gamma_i-temp[1])
             end
         end
@@ -225,6 +299,34 @@ end
 
 
 function Run_H2_Multiple_Instances_CS(x, n, p, qq, seed, solIpopt, tau, filename, running_time=false, kernel_cutoff=0.0001)
+
+    """`
+        Applies correlative-sparsity-enabled H2 Algorithm to a multiples QCQP instance generated using different `seed` 
+        Instances are generated randomly and are block-diagonal, having p blocks, each of size qq.
+        
+        # Arguments
+        - `x::Vector`: Initial vector of decision variables 
+        - `n::Int`: Dimension of the problem.
+        - `p::Int`: The total number of cliques (blocks) in the problem.
+        - `qq::Int`: The size of each clique (number of variables per block).
+        - `seed::Vector`: Vector of seeds allowing to solve different instances corresponding to different random seeds.
+        - `solIpopt`: Vector of available local solution for each seed (here obtained from an external local optimizer IPOPT).
+        - `tau::Float64`: Filtering parameter.
+        - `filename::String`: Name of the .txt file that will contain solving logs for each instance.
+        - `running_time::Bool` (optional): If `true`, measures and returns the total runtime of the H2. Default is `false`.
+        - `kernel_cutoff::Float64` (optional): Threshold $\beta$ controling the strength of the Tikhonov regularization of marginal Christoffel polynomials. Default is `0.0001`.
+        
+        # Returns
+        Following lists:
+        1. `All_opts`: A list of all strengthened bounds for each QCQP instance
+        2. `ALL_gaps`: A list of all post-H2 gaps for each QCQP instance
+        3. `ALL_Gammas`: A list of all marginal CDK thresholds for each QCQP instance
+        4. `ALL_UBS`: A list of upper bounds for each instance identified during the optimization process.
+        5. `All_MM`: A list of moment matrices for each instance from which marginal CDKs were constructed
+        6. `All_time`: A collection of runtimes for each instance, if `running_time` is `true`.
+
+    
+    """
     
         All_opts = Any[]
         ALL_gaps = Any[]
@@ -275,7 +377,45 @@ end
 
 
 
-function AnalyseResults_H2(results,data)
+function AnalyseResults_H2(results,data, delta=0.5)
+
+    """`
+
+    Analyzes the performance of H2
+
+    # Arguments
+    - `results`: A data structure containing the output of the H2 optimization process. It is expected to include bounds, gaps, and timing information for each test case.
+    - `data`: A data structure containing TRUE reference values and problem-specific details (in form of a list), such as:
+        - `data[3]`: Upper bounds for each test case.
+        - `data[4]`: True optimal values.
+        - `data[6]`: Timing information for the second-order SPARSE moment relaxation.
+        - `data[7]`: Seeds or identifiers from which POP/QCQP instances were generated.
+    - `delta::Float64`: Desired gap tolerance (in %)
+
+    
+    # Returns
+    A tuple with the following elements:
+    1. **Average gaps**: 
+        - `[PREavg, POSTavg]`: Mean gaps (in percentage) before and after applying H2, for non-failed cases.
+    2. **Maximum gaps**: 
+        - `[PREmax, POSTmax]`: Maximum gaps (in percentage) before and after applying H2, for non-failed  cases.
+    3. **Timing information**:
+        - `[H2_time, order2_time]`: Mean runtime for H2 and for the second-order SPARSE relaxation, for non-failed  cases.
+    4. **Failure analysis**:
+        - `[length(failed_seeds), count_gaps_below_threshold]`: Number of failed cases (failed = H2 produced an upper bound) and count of Solved cases (Solved = post-H2 gaps are 
+          below a delta% threshold).
+    5. **Details of failed cases**:
+        - `[failed, failed_seeds]`: Indices of failed cases and their corresponding seeds.
+    6. **Accuracy of IPOPT results**:
+        - `[Ipopt_not_exact, Ipopt_not_exact_seeds, length(Ipopt_not_exact)]`: Indices of cases where IPOPT bounds are not exact, corresponding seeds, and the total count of such 
+        cases.
+    
+    # Notes
+    - A case is considered "failed" if the lower bound exceeds the upper bound by more than `1e-6`.
+    - The function computes gaps as percentages of the true values.
+    - Seeds provide a means of identifying and analyzing specific cases.
+
+    """
 
     tot_number_cases=length(data[7])
 
@@ -294,7 +434,7 @@ function AnalyseResults_H2(results,data)
     POSTmax = maximum(POSTGaps)   # post H2 mmax  gap
     PREmax = maximum(PREGaps)   # pre H2 max gap
     
-    count_gaps_below_threshold = count(x -> x < 0.5, POSTGaps)  #solved cases
+    count_gaps_below_threshold = count(x -> x < delta, POSTGaps)  #solved cases
 
     order2_time=mean([data[6][i] for i in 1:tot_number_cases if !(i in failed)])
     H2_time=mean([results[end][i] for i in 1:tot_number_cases if !(i in failed)])
@@ -317,6 +457,22 @@ end
 
 
 function get_monomial_elements(monomial)
+    """
+    Extracts the individual elements (variables) of a given monomial, accounting for their powers. 
+    Each variable in the monomial appears in the output list as many times as its exponent.
+    
+    # Arguments
+    - `monomial`: A symbolic monomial expression
+    
+    # Returns
+    - `terms::Vector`: A vector containing the variables in the monomial, repeated according to their powers.
+    
+    # Example
+    # Suppose `x^2 * y` is a monomial:
+    monomial = :(x^2 * y)
+    get_monomial_elements(monomial) 
+    # Output: [x, x, y]
+    """
     terms = []
     for term in unique(variables(monomial))
         exp = degree(monomial, term)
@@ -326,6 +482,20 @@ function get_monomial_elements(monomial)
 end
 
 function compute_mom_vector_CS(monomials, MomMat, cliques_no)
+
+    """
+    Computes the vector of moments `ystar` for a given set of monomials, using a moment matrix and clique structure. 
+    This function maps monomial terms to the corresponding indices in the moment matrix based on the clique structure.
+    
+    # Arguments
+    - `monomials::Vector`: A vector of monomials for which the moment vector is to be computed.
+    - `MomMat::Matrix`: The moment matrix from which moment values are extracted.
+    - `cliques_no::Vector`: Clique index.
+    
+    # Returns
+    - `ystar::Vector`: A vector containing the computed moment values for each monomial. The last element of `ystar` is always `1`.
+    
+    """
     ind = []
 
     for mon in monomials
@@ -358,6 +528,23 @@ function compute_mom_vector_CS(monomials, MomMat, cliques_no)
 end
 
 function construct_CDK_CS(Mm, threshold=0.001)
+    """
+    For each clique/block, this function constructs Christoffel polynomial of order d (CDK),
+    using Singular Value Decomposition (SVD) for the input moment matrix `Mm` of order d. 
+    
+    # Arguments
+    - `Mm::Matrix`: The (clique-based) input moment matrix from which which the CDK is constructed.
+    - `threshold::Float64` (optional): A threshold value for filtering eigenvalues (i.e., deciding the numerical rank of `Mm`) . Default is `0.001`.
+    
+    # Returns
+    Following lists:
+    - `Kernel`: Polynomials in the kernel of the moment matrix of each clique.
+    - `Cdk`: The constructed CDK for each clique.
+    - `posEV`: Number of positive eigenvalues of the moment matrix of each clique.
+    - `minEV`: The minimum eigenvalue of the moment matrix of each clique.
+    - `negEV`: Number of negative eigenvalues of the moment matrix of each clique.
+    
+    """
     Cdk = []
     Kernel = []
     posEV = []
@@ -403,6 +590,35 @@ end
 
 
 function iterate_Ly_block_diag_CS(x,n,p,qq,N,eps,seed,running_time=false,gap_tol=0.5,kernel_cutoff=0.0001)
+    """
+
+    Performs iterative bound strengthening (i.e, implements H1) for  a particular randomly generated  block-diagonal instance of QCQP.
+    This is compatible with correlative sparsity exploitation.
+    
+    # Arguments
+    - `x::Vector`: Initial vector of decision variables.
+    - `n::Int`: Dimension or size of the problem.
+    - `p::Int`: The total number of cliques (blocks) in the problem.
+    - `qq::Int`: The size of each clique (number of variables per block).
+    - `N::Int`: Maximum number of iterations to perform.
+    - `eps::Float64`: Perturbation factor deciding the volume of CDK sublevel sets.
+    - `seed::Int`: Seed value that generates a particular POP instance
+    - `running_time::Bool` (optional): If `true`, measures and returns the total runtime of H1. Default is `false`.
+    - `gap_tol::Float64` (optional): Threshold for optimality gap tolerance. Default is `0.5`.
+    - `kernel_cutoff::Float64` (optional): Threshold $\beta$ controlling the strength of the Tikhonov regularization of CDK. 
+       Default is `0.0001`.
+    
+    # Returns
+    A list with the following elements:
+    1. `OPT`: Relaxation bound from each iteration.
+    2. `gap_history`: A history of the optimality gaps at each iteration.
+    3. `Moment_matrices`: Moment matrices computed during each iterations used to construct CDK sublevel constraints.
+    4. `K`: Parameter to keep track of the rank of the moment matrices for each iteration.
+    5. `Certain_overrestriction`: A measure or flag for over-restriction (when H1 is sure that further feasible set reductions would yield an invalid bound).
+    6. `UBH`: History of upper bounds with respect to which the optimality gap is measured
+    7. `Times`: SDP solving time of each iteration, if `running_time` is `true`.
+
+    """
 
     println()
     println("_______________ INITIAL PROBLEM CHARACTERISTICS: ")
@@ -640,6 +856,34 @@ end
 
 
 function Run_H1_Multiple_Instances_CS(x, n, p, qq, N, eps, seed, filename, running_time=false,gap_tol=0.5, kernel_cutoff=0.0001)
+    """        
+        Applies H1 (with enabled sparsity) to different randomly generated and block-diagonal QCQP instances.
+        
+        # Arguments
+        - `x::Vector`: Initial vector of decision variables.
+        - `n::Int`: Dimension or size of the problem.
+        - `p::Int`: The total number of cliques (blocks) in the problem.
+        - `qq::Int`: The size of each clique (number of variables per block).
+        - `N::Int`: Maximum number of iterations to perform for each QCQP instance.
+        - `eps::Float64`: Perturbation factor deciding the volume of CDK sublevel sets.
+        - `seed::Vector`: Vector of different seed values that generate different  POP instances.
+        - `filename::String`: The name of the ".txt" file where H1 logs should be saved.
+        - `running_time::Bool` (optional): If `true`, measures and returns the total runtime for each instance. Default is `false`.
+        - `gap_tol::Float64` (optional): Threshold for optimality gap tolerance. Default is `0.5`.
+        - `kernel_cutoff::Float64` (optional): Threshold $\beta$ controlling the strength of the Tikhonov regularization of CDK. 
+           Default is `0.001`. 
+            
+        # Returns
+        A list with the following elements:
+        1. `All_opts`: History of bound strengthening for each instance.
+        2. `ALL_gaps`: History of optimality gaps for each instance.
+        3. `All_MM`: History of moment matrices for each iteration of each instance.
+        4. `All_MM_ranks`: History of the rank changes for the moment matrices for each iteration of each instance.
+        5. `All_overrestrictions`: A flag for over-restriction (H1 is certain that further feasible set reductions are not necessary)
+        6. `All_UBS`: Available upper bound for all instances.
+        7. `All_Times`: SDP solving time measurements iterations and for all instances, if `running_time` is `true`.
+        
+        """
     
         All_opts = Any[]
         ALL_gaps = Any[]
@@ -705,6 +949,49 @@ end
 
 
 function AnalyseResults_H1(results,data,gap_tol=0.5)
+
+    """`
+
+    Analyzes the performance of H1
+
+        # Arguments
+        - `results`: A data structure containing the output of the H1 optimization process. It is expected to include bounds, gaps, and timing information 
+           for each test case.
+        - `data`: A data structure containing TRUE reference values and problem-specific details (in form of a list), such as:
+            - `data[3]`: Upper bounds for each test case.
+            - `data[4]`: True optimal values.
+            - `data[6]`: Timing information for the second-order moment relaxation.
+            - `data[7]`: Seeds or identifiers from which POP/QCQP instances were generated.
+        - `delta::Float64`: Desired gap tolerance (in %)
+    
+        
+        # Returns
+        A tuple with the following elements:
+        1. **Average gaps**: 
+            - `[PREavg, POSTavg]`: Mean gaps (in percentage) before and after applying H1, for non-failed cases.
+        2. **Maximum gaps**: 
+            - `[PREmax, POSTmax]`: Maximum gaps (in percentage) before and after applying H1, for non-failed  cases.
+        3. **Timing information**:
+            - `[H2_time, order2_time]`: Mean runtime for H1 and second-order relaxation, for non-failed  cases.
+        4. **Failure analysis**:
+            - `[length(failed_seeds), count_gaps_below_threshold, identified_overrestrictions]`: Number of failed cases (failed = H1 produced an upper 
+               bound), count of Solved cases (Solved = post-H2 gaps are below a delta% threshold), and number of cases where H1 is certain that no further 
+               feasible set reductions are possible.
+        5. **Details of failed cases**:
+            - `[failed, failed_seeds]`: Indices of failed cases and their corresponding seeds.
+        6. **Accuracy of IPOPT results**:
+            - `[Ipopt_not_exact, Ipopt_not_exact_seeds, length(Ipopt_not_exact)]`: Indices of cases where IPOPT bounds are not exact, corresponding seeds, 
+               and the total count of such cases.
+        7. **ITERATIONSavg**: Mean runtime for H1 over for non-failed  cases.
+            - 
+
+        
+        # Notes
+        - A case is considered "failed" if the lower bound exceeds the upper bound by more than `1e-6`.
+        - The function computes gaps as percentages of the true values.
+        - Seeds provide a means of identifying and analyzing specific cases.
+    
+        """
 
     tot_number_cases=length(data[7])
 
