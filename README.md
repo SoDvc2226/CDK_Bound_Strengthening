@@ -1,4 +1,4 @@
-# Using Christoffel-Darboux Kernels to Strengthen Moment-SOS Relaxations
+# Leveraging Christoffel-Darboux Kernels to Strengthen Moment-SOS Relaxations
 
 We provide the `code` and the `data` used for the numerical experiments in:
 
