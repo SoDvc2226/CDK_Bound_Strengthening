@@ -83,6 +83,7 @@ or when using correlative sparsity adapted versions `H1CS` and `H2CS`.
 ## Main references:
 - [TSSOS: a Julia library to exploit sparsity for large-scale polynomial optimization](https://arxiv.org/abs/2103.00915)
 - [Sparse Polynomial Optimization: Theory and Practice](https://arxiv.org/abs/2208.11158)
+- [The Christoffel–Darboux Kernel for Data Analysis](https://www.cambridge.org/core/books/christoffeldarboux-kernel-for-data-analysis/CFA5119ADEA8671297D89F08C21ACF98)
 
 
 ## Contact 
