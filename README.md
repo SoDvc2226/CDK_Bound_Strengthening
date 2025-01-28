@@ -2,7 +2,7 @@
 
 We provide the `code` and the `data` used for the numerical experiments in:
 
-[1] "Leveraging Christoffel-Darboux Kernels to Strengthen Moment-SOS Relaxations" arXiv preprint 
+[1] Srećko Ðurašinović, Perla Azzi, Jean-Bernard Lasserre, Victor Magron, Olga Mula, and Jun Zhao. "*Leveraging Christoffel-Darboux Kernels to Strengthen Moment-SOS Relaxations*" arXiv, https://arxiv.org/abs/2501.14281, 2025. 
 
 #
 
