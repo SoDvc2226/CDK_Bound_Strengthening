@@ -148,15 +148,15 @@ CDK_4_order2 = construct_marginal_CDK(x, k, dc, data.moment[1])  # Constructs ma
 ```
 - sparse Moment-SOS hierarchy of order 2
 ```julia
-d=2
+d = 2
 opt, sol, data = cs_tssos_first(pop, x, d, TS=false, solution=true, Mommat=true);
 
-k=4
-dc=1
+k = 4
+dc = 1
 CDK_sparse_order1 = construct_CDK_cs(x, dc, data.moment, data.cliques)  # Constructs multivariate Christoffel polynomial of order dc=1 for each identified clique.
 CDK_sparse_4_order1 = construct_marginal_CDK_cs(x, k, dc, data.moment, data.cliques)  # Constructs marginal Christoffel polynomial, associated to x_4, of order dc=1 
 
-dc=2
+dc = 2
 CDK_sparse_order2 = construct_CDK_cs(x, dc, data.moment, data.cliques)  # Constructs multivariate Christoffel polynomial of order dc=2 for each identified clique.
 CDK_sparse_4_order2 = construct_marginal_CDK_cs(x, k, dc, data.moment, data.cliques)  # Constructs marginal Christoffel polynomial, associated to x_4, of order dc=2
 
