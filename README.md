@@ -112,7 +112,7 @@ resultH2 = run_H2(pop,x,d,dc,local_sol,tau)
 ```
 Alternatively, the problem can be solved using the sparse moment-SOS hierarchy:
 ```julia
-opt, sol, data = cs_tssos_first(pop, x, d, TS=false, CS=false, solution=true)
+opt, sol, data = cs_tssos_first(pop, x, d, TS=false, solution=true)
 ```
 Afterwards, the bound can be strengthened either via **H1CS**:
 ```julia
